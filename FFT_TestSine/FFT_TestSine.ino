@@ -119,7 +119,12 @@ const int16_t PROGMEM Sinewave[N_WAVE - N_WAVE / 4] = {
   -32727, -32736, -32744, -32751, -32757, -32761, -32764, -32766,
 };
 
-#define FFT_N 64 // set to 64 point fft
+
+#define FFT_N      256                     // set to 64 point fft
+#define LOG2_FFT_N 8                       // log2(N_WAVE)
+#define twoPi 6.28318531
+
+
 int16_t fr[FFT_N] = {0}, fi[FFT_N] = {0};
 
 void setup() {
@@ -137,7 +142,20 @@ void setup() {
     fi[i] = 0; // imaginary part
   }
 
-  fix_fft(fr, fi, 6, 0);
+
+  // BEGIN ----- multiply with hamming window
+  for (uint16_t i = 0; i < (FFT_N >> 1); i++)
+  {
+    double ratio = ((double) i / (double)(FFT_N - 1));
+    double weighingFactor = (0.54 - (0.46 * cos(twoPi * ratio)))*255;
+
+    fr[i] *= weighingFactor;
+    fr[FFT_N - (i + 1)] *= weighingFactor;
+  }
+  // END ----- multiply with hamming window
+
+
+  fix_fft(fr, fi, LOG2_FFT_N, 0);
 
   // print bin index and amplitude
 
