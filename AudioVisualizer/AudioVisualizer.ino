@@ -24,8 +24,10 @@ SOFTWARE.
 #include <arduinoFFT.h>
 #include <MD_MAX72xx.h>
 #include <SPI.h>
+#include <assert.h>
 
-#define SAMPLES 64                          //Must be a power of 2
+
+#define SAMPLES 128                         //Must be a power of 2
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW   // Set display type  so that  MD_MAX72xx library treets it properly
 #define MAX_DEVICES  4                      // Total number display modules
 #define CLK_PIN      13                     // Clock pin to communicate with display
@@ -63,7 +65,7 @@ arduinoFFT FFT = arduinoFFT();                                    // FFT object
 
 void setup()
 {
-  ADCSRA = 0b11100101;      // set ADC to free running mode and set pre-scalar to 32 (0xe5)
+  ADCSRA = 0b11100100;      // set ADC to free running mode and set pre-scalar to 32 (0xe5)
   ADMUX =  0b00000000;       // use pin A0 and external voltage reference
   pinMode(buttonPin, INPUT);
   mx.begin();           // initialize display
@@ -74,52 +76,55 @@ void setup()
 
 void loop()
 {
-  char data_avgs[xres];
+  uint8_t data_avgs[xres];
   static int peaks[xres];
   double vReal[SAMPLES];
   double vImag[SAMPLES];
 
     
   // ++ Sampling
-  for(int i=0; i<SAMPLES; i++)
+  for(uint8_t i=0; i<SAMPLES; i++)
   {
-    while(!(ADCSRA & 0x10));        // wait for ADC to complete current conversion ie ADIF bit set
-    ADCSRA = 0b11110101 ;           // clear ADIF bit so that ADC can do next operation (0xf5)
-    int value = ADC - 512 ;         // Read from ADC and subtract DC offset caused value
-    vReal[i]= value/8;              // Copy to bins after compressing
+    uint16_t value = 0;
+    for (uint8_t k = 0; k < 16; ++k)  //oversampling by 16
+    {
+      while(!(ADCSRA & 0x10));        // wait for ADC to complete current conversion ie ADIF bit set
+      ADCSRA = 0b11110100 ;           // clear ADIF bit so that ADC can do next operation (0xf5)
+      value += ADC;
+    }
+    value /= 16*8;                    // average for oversampling and remove lowest 3 bits 
+    vReal[i] = (int16_t)(value) - 64;            // remove offset and copy to bins after compressing
     vImag[i] = 0;                         
   }
   // -- Sampling
 
  
   // ++ FFT
-  FFT.Windowing(vReal, SAMPLES, FFT_WIN_TYP_HAMMING, FFT_FORWARD);
+//  FFT.Windowing(vReal, SAMPLES, FFT_WIN_TYP_HAMMING, FFT_FORWARD);
   FFT.Compute(vReal, vImag, SAMPLES, FFT_FORWARD);
   FFT.ComplexToMagnitude(vReal, vImag, SAMPLES);
   // -- FFT
 
     
   // ++ re-arrange FFT result to match with no. of columns on display ( xres )
-  int step = (SAMPLES/2)/xres; 
-  int c=0;
-  for(int i=0; i<(SAMPLES/2); i+=step)  
+  uint8_t step = (SAMPLES/2)/xres; //1
+  for(uint8_t i = 0; i < xres; i++)  
   {
-    data_avgs[c] = 0;
-    for (int k=0 ; k< step ; k++)
+    data_avgs[i] = 0;
+    for (uint8_t k = 0; k < step; k++)
     {
-      data_avgs[c] = data_avgs[c] + vReal[i+k];
+      data_avgs[i] += vReal[step*i + k];
     }
-    data_avgs[c] = data_avgs[c]/step; 
-    c++;
+//    data_avgs[i] = data_avgs[i]/step;
   }
   // -- re-arrange FFT result to match with no. of columns on display ( xres )
 
     
   // ++ send to display according measured value 
-  for(int i=0; i<xres; i++)
+  for(uint8_t i = 0; i < xres; i++)
   {
-    data_avgs[i] = constrain(data_avgs[i], 0, 80);            // set max & min values for buckets
-    data_avgs[i] = map(data_avgs[i], 0, 80, 0, yres);         // remap averaged values to yres
+    data_avgs[i] = constrain(data_avgs[i], 0, 256);            // set max & min values for buckets
+    data_avgs[i] = map(data_avgs[i], 0, 256, 0, yres);         // remap averaged values to yres
     yvalue=data_avgs[i];
 
     peaks[i] = peaks[i]-1;    // decay by one light
