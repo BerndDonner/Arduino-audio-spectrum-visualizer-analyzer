@@ -35,6 +35,7 @@ SOFTWARE.
 #define yres 8                              // Total number of  rows in the display
 
 
+//int MY_MODE_1[] = {1, 3, 7, 15, 31, 63, 127, 255, 255}; // standard pattern
 int MY_MODE_1[] = {0, 128, 192, 224, 240, 248, 252, 254, 255}; // standard pattern
 int MY_MODE_2[] = {0, 128, 64,  32,  16,  8,   4,   2,   1};   // only peak pattern
 int MY_MODE_3[] = {0, 128, 192, 160, 144, 136, 132, 130, 129}; // only peak +  bottom point
@@ -87,7 +88,7 @@ void loop()
 
  
   // ++ FFT
-  FFT.Windowing(vReal, SAMPLES, FFT_WIN_TYP_BLACKMAN_HARRIS, FFT_FORWARD);
+  FFT.Windowing(vReal, SAMPLES, FFT_WIN_TYP_HAMMING, FFT_FORWARD);
   FFT.Compute(vReal, vImag, SAMPLES, FFT_FORWARD);
   FFT.ComplexToMagnitude(vReal, vImag, SAMPLES);
   // -- FFT
