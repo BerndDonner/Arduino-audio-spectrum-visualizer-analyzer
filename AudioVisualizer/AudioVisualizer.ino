@@ -44,13 +44,10 @@ int MY_MODE_5[] = {0b00000000, 0b00000001, 0b00000011, 0b00000111, 0b00001111, 0
 
 int* MY_ARRAY = MY_MODE_1;
  
-double vReal[SAMPLES];
-double vImag[SAMPLES];
-char data_avgs[xres];
+
 
 int yvalue;
 int displaycolumn , displayvalue;
-int peaks[xres];
 const int buttonPin = 5;    // the number of the pushbutton pin
 int state = HIGH;           // the current reading from the input pin
 int previousState = LOW;    // the previous reading from the input pin
@@ -72,9 +69,17 @@ void setup()
   mx.begin();           // initialize display
   delay(50);            // wait to get reference voltage stabilized
 }
- 
+
+
+
 void loop()
 {
+  char data_avgs[xres];
+  static int peaks[xres];
+  double vReal[SAMPLES];
+  double vImag[SAMPLES];
+
+    
   // ++ Sampling
   for(int i=0; i<SAMPLES; i++)
   {
@@ -134,35 +139,29 @@ void displayModeChange() {
   int reading = digitalRead(buttonPin);
   if (reading == HIGH && previousState == LOW && millis() - lastDebounceTime > debounceDelay) // works only when pressed
   {
-
-  switch (displaymode)
-  {
-    case 1:    //       move from mode 1 to 2
-      displaymode = 2;
-      MY_ARRAY=MY_MODE_2;
-      break;
-    case 2:    //       move from mode 2 to 3
-      displaymode = 3;
-      for (int i=0 ; i<=8 ; i++ )
-      MY_ARRAY=MY_MODE_3;
-      break;
-    case 3:    //     move from mode 3 to 4
-      displaymode = 4;
-      for (int i=0 ; i<=8 ; i++ )
-      MY_ARRAY=MY_MODE_4;
-      break;
-    case 4:    //     move from mode 4 to 5
-      displaymode = 5;
-      for (int i=0 ; i<=8 ; i++ )
-      MY_ARRAY=MY_MODE_5;
-      break;
-    case 5:    //      move from mode 5 to 1
-      displaymode = 1;      
-      for (int i=0 ; i<=8 ; i++ )
-      MY_ARRAY=MY_MODE_1;
-      break;
-  }
-
+    switch (displaymode)
+    {
+      case 1:    //       move from mode 1 to 2
+        displaymode = 2;
+        MY_ARRAY=MY_MODE_2;
+        break;
+      case 2:    //       move from mode 2 to 3
+        displaymode = 3;
+        MY_ARRAY=MY_MODE_3;
+        break;
+      case 3:    //     move from mode 3 to 4
+        displaymode = 4;
+        MY_ARRAY=MY_MODE_4;
+        break;
+      case 4:    //     move from mode 4 to 5
+        displaymode = 5;
+        MY_ARRAY=MY_MODE_5;
+        break;
+      case 5:    //      move from mode 5 to 1
+        displaymode = 1;      
+        MY_ARRAY=MY_MODE_1;
+        break;
+    }
     lastDebounceTime = millis();
   }
   previousState = reading;
