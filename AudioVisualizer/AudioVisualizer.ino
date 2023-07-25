@@ -26,9 +26,23 @@ SOFTWARE.
 #include <assert.h>
 #include "fix_fft.h"
 
+/**
+ * for frequencies 0-2400Hz:
+ * FFT_N          128
+ * LOG2_FFT_N     7
+ * oversampling by 16
+ * ADCSRA = 0b11110100;
+ *
+ * for frequencies 2400-20000Hz:
+ * FFT_N          256
+ * LOG2_FFT_N     8
+ * oversampling by 2
+ * ADCSRA = 0b11110100;
+ */ 
 
-#define FFT_N          128                    // set to 64 point fft
-#define LOG2_FFT_N     7                      // log2(N_WAVE)
+
+#define FFT_N          64                     // set to 64 point fft
+#define LOG2_FFT_N     6                      // log2(N_WAVE)
 #define twoPi          6.28318531
 #define HARDWARE_TYPE  MD_MAX72XX::FC16_HW    // Set display type  so that  MD_MAX72xx library treets it properly
 #define MAX_DEVICES    4                      // Total number display modules
@@ -65,7 +79,7 @@ MD_MAX72XX mx = MD_MAX72XX(HARDWARE_TYPE, CS_PIN, MAX_DEVICES);   // display obj
 
 void setup()
 {
-  ADCSRA = 0b11100100;      // set ADC to free running mode and set pre-scalar to 32 (0xe5)
+  ADCSRA = 0b11100101;      // set ADC to free running mode and set pre-scalar to 32 (0xe5)
   ADMUX =  0b00000000;       // use pin A0 and external voltage reference
   pinMode(buttonPin, INPUT);
   mx.begin();           // initialize display
@@ -91,13 +105,13 @@ void loop()
   for(uint16_t i=0; i < FFT_N; i++)
   {
     uint16_t value = 0;
-    for (uint8_t k = 0; k < 16; ++k)    //oversampling by 2
+    for (uint8_t k = 0; k < 1; ++k)    //oversampling by 1
     {
       while(!(ADCSRA & 0x10));        // wait for ADC to complete current conversion ie ADIF bit set
-      ADCSRA = 0b11110100 ;           // clear ADIF bit so that ADC can do next operation (0xf5)
+      ADCSRA = 0b11110101;           // clear ADIF bit so that ADC can do next operation (0xf5)
       value += ADC;
     }
-    value /= 16*8;                    // average for oversampling and remove lowest 3 bits 
+    value /= 1*8;                    // average for oversampling and remove lowest 3 bits 
     fr[i] = (int16_t)(value) - 64;    // remove offset and copy to bins after compressing
     fi[i] = 0;                         
   }
