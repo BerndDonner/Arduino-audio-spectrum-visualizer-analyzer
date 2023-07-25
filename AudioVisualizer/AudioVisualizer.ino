@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2019 Shajeeb TM
+Copyright (c) 2019 Shajeeb TM, 2023 Bernd Donner
 
 https://github.com/shajeebtm/Arduino-audio-spectrum-visualizer-analyzer/
 https://create.arduino.cc/projecthub/Shajeeb/32-band-audio-spectrum-visualizer-analyzer-902f51
@@ -21,20 +21,23 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#include <arduinoFFT.h>
 #include <MD_MAX72xx.h>
 #include <SPI.h>
 #include <assert.h>
+#include "fix_fft.h"
 
 
-#define SAMPLES 128                         //Must be a power of 2
-#define HARDWARE_TYPE MD_MAX72XX::FC16_HW   // Set display type  so that  MD_MAX72xx library treets it properly
-#define MAX_DEVICES  4                      // Total number display modules
-#define CLK_PIN      13                     // Clock pin to communicate with display
-#define DATA_PIN     11                     // Data pin to communicate with display
-#define CS_PIN       10                     // Control pin to communicate with display
-#define xres 32                             // Total number of  columns in the display, must be <= SAMPLES/2
-#define yres 8                              // Total number of  rows in the display
+#define FFT_N          128                    // set to 64 point fft
+#define LOG2_FFT_N     7                      // log2(N_WAVE)
+#define twoPi          6.28318531
+#define HARDWARE_TYPE  MD_MAX72XX::FC16_HW    // Set display type  so that  MD_MAX72xx library treets it properly
+#define MAX_DEVICES    4                      // Total number display modules
+#define CLK_PIN        13                     // Clock pin to communicate with display
+#define DATA_PIN       11                     // Data pin to communicate with display
+#define CS_PIN         10                     // Control pin to communicate with display
+#define xres           32                     // Total number of  columns in the display
+#define yres           8                      // Total number of  rows in the display
+#undef DEBUG
 
 
 //int MY_MODE_1[] = {1, 3, 7, 15, 31, 63, 127, 255, 255}; // standard pattern
@@ -47,7 +50,6 @@ int MY_MODE_5[] = {0b00000000, 0b00000001, 0b00000011, 0b00000111, 0b00001111, 0
 int* MY_ARRAY = MY_MODE_1;
  
 
-
 int yvalue;
 int displaycolumn , displayvalue;
 const int buttonPin = 5;    // the number of the pushbutton pin
@@ -59,8 +61,6 @@ unsigned long debounceDelay = 50;    // the debounce time; increase if the outpu
 
 
 MD_MAX72XX mx = MD_MAX72XX(HARDWARE_TYPE, CS_PIN, MAX_DEVICES);   // display object
-arduinoFFT FFT = arduinoFFT();                                    // FFT object
- 
 
 
 void setup()
@@ -70,52 +70,77 @@ void setup()
   pinMode(buttonPin, INPUT);
   mx.begin();           // initialize display
   delay(50);            // wait to get reference voltage stabilized
-}
 
+  #ifdef DEBUG
+    Serial.begin(9600);
+  #endif
+}
 
 
 void loop()
 {
   uint8_t data_avgs[xres];
   static int peaks[xres];
-  double vReal[SAMPLES];
-  double vImag[SAMPLES];
+  int16_t fr[FFT_N], fi[FFT_N];
 
-    
+  #ifdef DEBUG
+    Serial.println("Sampling Started!");
+  #endif
+   
   // ++ Sampling
-  for(uint8_t i=0; i<SAMPLES; i++)
+  for(uint16_t i=0; i < FFT_N; i++)
   {
     uint16_t value = 0;
-    for (uint8_t k = 0; k < 16; ++k)  //oversampling by 16
+    for (uint8_t k = 0; k < 16; ++k)    //oversampling by 2
     {
       while(!(ADCSRA & 0x10));        // wait for ADC to complete current conversion ie ADIF bit set
       ADCSRA = 0b11110100 ;           // clear ADIF bit so that ADC can do next operation (0xf5)
       value += ADC;
     }
     value /= 16*8;                    // average for oversampling and remove lowest 3 bits 
-    vReal[i] = (int16_t)(value) - 64;            // remove offset and copy to bins after compressing
-    vImag[i] = 0;                         
+    fr[i] = (int16_t)(value) - 64;    // remove offset and copy to bins after compressing
+    fi[i] = 0;                         
   }
   // -- Sampling
 
- 
+  #ifdef DEBUG
+    Serial.println("Hamming Window multiplication started!");
+  #endif
+
+  // BEGIN ----- multiply with hamming window
+  for (uint8_t i = 0; i < (FFT_N >> 1); i++)
+  {
+    double ratio = ((double) i / (double)(FFT_N - 1));
+    double weighingFactor = (0.54 - (0.46 * cos(twoPi * ratio)))*16;
+
+    fr[i] = ((double)fr[i]) * weighingFactor;
+    fr[FFT_N - (i + 1)] = ((double)fr[FFT_N - (i + 1)]) * weighingFactor;
+  }
+  // END ----- multiply with hamming window
+
+  #ifdef DEBUG
+    Serial.println("FFT Started!");
+  #endif
+
   // ++ FFT
-//  FFT.Windowing(vReal, SAMPLES, FFT_WIN_TYP_HAMMING, FFT_FORWARD);
-  FFT.Compute(vReal, vImag, SAMPLES, FFT_FORWARD);
-  FFT.ComplexToMagnitude(vReal, vImag, SAMPLES);
+  fix_fft(fr, fi, LOG2_FFT_N, 0);
   // -- FFT
+
+  #ifdef DEBUG
+    Serial.println("FFT Finisched!");
+  #endif
 
     
   // ++ re-arrange FFT result to match with no. of columns on display ( xres )
-  uint8_t step = (SAMPLES/2)/xres; //1
+  uint8_t step = (FFT_N >> 1)/xres; 
   for(uint8_t i = 0; i < xres; i++)  
   {
     data_avgs[i] = 0;
     for (uint8_t k = 0; k < step; k++)
     {
-      data_avgs[i] += vReal[step*i + k];
+      float mag2 = (int32_t)fr[step*i + k] * fr[step*i + k] + (int32_t)fi[step*i + k] * fi[step*i + k];  // fr, fi should be between +-64
+      data_avgs[i] += sqrt(mag2);
     }
-//    data_avgs[i] = data_avgs[i]/step;
   }
   // -- re-arrange FFT result to match with no. of columns on display ( xres )
 
@@ -123,8 +148,8 @@ void loop()
   // ++ send to display according measured value 
   for(uint8_t i = 0; i < xres; i++)
   {
-    data_avgs[i] = constrain(data_avgs[i], 0, 256);            // set max & min values for buckets
-    data_avgs[i] = map(data_avgs[i], 0, 256, 0, yres);         // remap averaged values to yres
+    data_avgs[i] = constrain(data_avgs[i], 0, step*64);            // set max & min values for buckets
+    data_avgs[i] = map(data_avgs[i], 0, step*64, 0, yres);         // remap averaged values to yres
     yvalue=data_avgs[i];
 
     peaks[i] = peaks[i]-1;    // decay by one light

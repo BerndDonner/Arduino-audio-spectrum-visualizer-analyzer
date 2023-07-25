@@ -147,10 +147,10 @@ void setup() {
   for (uint16_t i = 0; i < (FFT_N >> 1); i++)
   {
     double ratio = ((double) i / (double)(FFT_N - 1));
-    double weighingFactor = (0.54 - (0.46 * cos(twoPi * ratio)))*255;
+    double weighingFactor = (0.54 - (0.46 * cos(twoPi * ratio)))*16;
 
-    fr[i] *= weighingFactor;
-    fr[FFT_N - (i + 1)] *= weighingFactor;
+    fr[i] = ((double)fr[i]) * weighingFactor;
+    fr[FFT_N - (i + 1)] = ((double)fr[FFT_N - (i + 1)]) * weighingFactor;
   }
   // END ----- multiply with hamming window
 
