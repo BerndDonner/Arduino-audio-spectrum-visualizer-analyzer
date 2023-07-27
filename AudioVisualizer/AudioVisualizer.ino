@@ -63,6 +63,7 @@ arduinoFFT FFT = arduinoFFT();                                    // FFT object
 
 void setup()
 {
+  Serial.begin(9600);
   ADCSRA = 0b11100101;      // set ADC to free running mode and set pre-scalar to 32 (0xe5)
   ADMUX =  0b00000000;       // use pin A0 and external voltage reference
   pinMode(buttonPin, INPUT);
@@ -136,6 +137,13 @@ void loop()
 } 
 
 void displayModeChange() {
+
+  uint32_t        currentTime = millis();
+  static uint32_t oldTime;
+  Serial.print("Laufzeit in ms: ");
+  Serial.println(currentTime - oldTime);
+  oldTime = currentTime;
+
   int reading = digitalRead(buttonPin);
   if (reading == HIGH && previousState == LOW && millis() - lastDebounceTime > debounceDelay) // works only when pressed
   {
