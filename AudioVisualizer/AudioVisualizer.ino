@@ -51,14 +51,13 @@ SOFTWARE.
 #define CS_PIN         10                     // Control pin to communicate with display
 #define xres           32                     // Total number of  columns in the display
 #define yres           8                      // Total number of  rows in the display
-#undef DEBUG
+#define DEBUG
 
 
-//int MY_MODE_1[] = {1, 3, 7, 15, 31, 63, 127, 255, 255}; // standard pattern
-int MY_MODE_1[] = {0, 128, 192, 224, 240, 248, 252, 254, 255}; // standard pattern
-int MY_MODE_2[] = {0, 128, 64,  32,  16,  8,   4,   2,   1};   // only peak pattern
-int MY_MODE_3[] = {0, 128, 192, 160, 144, 136, 132, 130, 129}; // only peak +  bottom point
-int MY_MODE_4[] = {0, 128, 192, 160, 208, 232, 244, 250, 253}; // one gap in the top , 3rd light onwards
+int MY_MODE_1[] = {0b00000000, 0b10000000, 0b11000000, 0b11100000, 0b11110000, 0b11111000, 0b11111100, 0b11111110, 0b11111111}; // standard pattern
+int MY_MODE_2[] = {0b00000000, 0b10000000, 0b01000000, 0b00100000, 0b00010000, 0b00001000, 0b00000100, 0b00000010, 0b00000001};   // only peak pattern
+int MY_MODE_3[] = {0b00000000, 0b10000000, 0b11000000, 160, 144, 136, 132, 130, 129}; // only peak +  bottom point
+int MY_MODE_4[] = {0b00000000, 0b10000000, 0b11000000, 160, 208, 232, 244, 250, 253}; // one gap in the top , 3rd light onwards
 int MY_MODE_5[] = {0b00000000, 0b00000001, 0b00000011, 0b00000111, 0b00001111, 0b00011111, 0b00111111, 0b01111111, 0b11111111}; // standard pattern, mirrored vertically
 
 int* MY_ARRAY = MY_MODE_1;
@@ -67,11 +66,6 @@ int* MY_ARRAY = MY_MODE_1;
 int yvalue;
 int displaycolumn , displayvalue;
 const int buttonPin = 5;    // the number of the pushbutton pin
-int state = HIGH;           // the current reading from the input pin
-int previousState = LOW;    // the previous reading from the input pin
-int displaymode = 1;
-unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
-unsigned long debounceDelay = 50;    // the debounce time; increase if the output flickers
 
 
 MD_MAX72XX mx = MD_MAX72XX(HARDWARE_TYPE, CS_PIN, MAX_DEVICES);   // display object
@@ -180,8 +174,20 @@ void loop()
 } 
 
 void displayModeChange() {
-  int reading = digitalRead(buttonPin);
-  if (reading == HIGH && previousState == LOW && millis() - lastDebounceTime > debounceDelay) // works only when pressed
+  static uint8_t  displaymode = 1;
+  uint8_t         reading = digitalRead(buttonPin);
+  static uint8_t  previousState = LOW;    // the previous reading from the input pin
+  uint32_t        currentTime = millis();   // the current time
+  static uint32_t lastDebounceTime = 0;     // the last time the output pin was toggled
+  const uint32_t  debounceDelay = 50;       // the debounce time; increase if the output flickers
+
+  #ifdef DEBUG
+    static uint32_t oldTime;
+    Serial.print("Laufzeit in ms: ");
+    Serial.println(currentTime - oldTime);
+    oldTime = currentTime;
+  #endif
+  if (reading == HIGH && previousState == LOW && currentTime - lastDebounceTime > debounceDelay) // works only when pressed
   {
     switch (displaymode)
     {
@@ -206,7 +212,7 @@ void displayModeChange() {
         MY_ARRAY=MY_MODE_1;
         break;
     }
-    lastDebounceTime = millis();
+    lastDebounceTime = currentTime;
   }
   previousState = reading;
 }
